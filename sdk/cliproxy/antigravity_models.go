@@ -112,12 +112,34 @@ func (s *Service) antigravityCapabilityKey(auth *coreauth.Auth) string {
 	return antigravityCapabilityKeyForRoute(auth, antigravityModelBaseURLs(auth)[0], s.antigravityModelFetchProxyURL(auth), antigravityModelUserAgent())
 }
 
-func antigravityCapabilityKeyForRoute(auth *coreauth.Auth, endpoint, proxy, userAgent string) string {
-	project, _ := auth.Metadata["project_id"].(string)
+func antigravityCapabilityKeyForRoute(auth *coreauth.Auth, endpoint, proxy, userAgent string) (key string) {
+	defer func() {
+		if r := recover(); r != nil {
+			if auth != nil {
+				key = fmt.Sprintf("%s/%d", auth.ID, auth.RegistrationEpoch)
+			}
+		}
+	}()
+	if auth == nil {
+		return ""
+	}
+	project := ""
+	if auth.Metadata != nil {
+		func() {
+			defer func() { _ = recover() }()
+			if p, ok := auth.Metadata["project_id"].(string); ok {
+				project = strings.TrimSpace(p)
+			}
+		}()
+	}
 	identity := auth.ID
-	if identity == "" {
-		token, _ := auth.Metadata["access_token"].(string)
-		identity = fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+	if identity == "" && auth.Metadata != nil {
+		func() {
+			defer func() { _ = recover() }()
+			if token, ok := auth.Metadata["access_token"].(string); ok {
+				identity = fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+			}
+		}()
 	}
 	return fmt.Sprintf("%q/%d/%q/%q/%q/%q", identity, auth.RegistrationEpoch, project, endpoint, proxy, userAgent)
 }
@@ -841,7 +863,14 @@ func (s *Service) runAntigravityModelRefresh(ctx context.Context) {
 			}
 			continue
 		case <-timer.C:
-			s.refreshAntigravityModels(ctx)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("refreshAntigravityModels recovered from panic: %v", r)
+					}
+				}()
+				s.refreshAntigravityModels(ctx)
+			}()
 		}
 		delay = s.nextAntigravityModelRefreshDelay()
 		deadline = antigravityNowFunc().Add(delay)
