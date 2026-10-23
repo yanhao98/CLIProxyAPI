@@ -96,7 +96,14 @@ func (s *Service) runAntigravityAccountRefresh(authID string) {
 		}
 		s.antigravityRefreshPending[authID] = nil
 		s.antigravityProbeMu.Unlock()
-		s.executeAntigravityModelRefresh(request)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("executeAntigravityModelRefresh recovered from panic: %v", r)
+				}
+			}()
+			s.executeAntigravityModelRefresh(request)
+		}()
 	}
 }
 
@@ -289,6 +296,11 @@ func (s *Service) queueAntigravityHintPersistence(ctx context.Context, auth *cor
 }
 
 func (s *Service) runAntigravityHintPersistence(authID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("runAntigravityHintPersistence recovered from panic: %v", r)
+		}
+	}()
 	defer s.antigravityProbeWg.Done()
 	defer s.signalAntigravityModelRefresh()
 	for {
@@ -308,7 +320,14 @@ func (s *Service) runAntigravityHintPersistence(authID string) {
 		}
 		s.antigravityPersistActive[authID] = request
 		s.antigravityProbeMu.Unlock()
-		s.executeAntigravityHintPersistence(persistCtx, cancel, request)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("executeAntigravityHintPersistence recovered from panic: %v", r)
+				}
+			}()
+			s.executeAntigravityHintPersistence(persistCtx, cancel, request)
+		}()
 	}
 }
 

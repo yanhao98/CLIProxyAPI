@@ -196,7 +196,7 @@ func (s *Service) persistedAntigravityHintsForAuth(auth *coreauth.Auth, endpoint
 			return antigravityModelCapabilityHints{}, false
 		}
 	}
-	project, _ := auth.Metadata["project_id"].(string)
+	project := coreauth.AuthMetadataString(auth, "project_id")
 	if hints, ok := parsePersistedAntigravityCapabilityHints(auth.Metadata, project, endpoint); ok {
 		return hints, true
 	}
@@ -223,7 +223,7 @@ func (s *Service) persistAntigravityCapabilityHints(ctx context.Context, auth *c
 	if stale {
 		return false
 	}
-	project, _ := auth.Metadata["project_id"].(string)
+	project := coreauth.AuthMetadataString(auth, "project_id")
 	value := buildPersistedAntigravityCapabilityHintsValue(project, endpoint, hints)
 	persisted, preempted := s.coreManager.PersistMetadataEntry(ctx, auth.ID, auth.RegistrationEpoch, antigravityPersistedHintsMetaKey, value, func(existing *coreauth.Auth) bool {
 		if existing == nil || existing.Disabled || existing.Provider != auth.Provider || existing.RegistrationEpoch != auth.RegistrationEpoch || s.antigravityCapabilityKey(existing) != expectedKey {
@@ -380,8 +380,7 @@ func (s *Service) fetchAntigravityModelCapabilityHints(ctx context.Context, auth
 	baseURLs, proxyURL := antigravityModelBaseURLs(auth), s.antigravityModelFetchProxyURL(auth)
 	userAgent := antigravityModelUserAgent()
 	cacheKey := antigravityCapabilityKeyForRoute(auth, baseURLs[0], proxyURL, userAgent)
-	accessToken, _ := auth.Metadata["access_token"].(string)
-	accessToken = strings.TrimSpace(accessToken)
+	accessToken := coreauth.AuthMetadataString(auth, "access_token")
 	if accessToken == "" || ctx.Err() != nil {
 		return cacheKey, s.cachedAntigravityHintsForKey(auth, baseURLs[0], cacheKey)
 	}
@@ -782,6 +781,11 @@ func (s *Service) applyAntigravityModelHints(ctx context.Context, auth *coreauth
 // One unfinished request must not block other accounts' retry or expiry deadlines.
 // Network concurrency remains bounded by antigravityProbeSlots.
 func (s *Service) refreshAntigravityModels(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("refreshAntigravityModels recovered from panic: %v", r)
+		}
+	}()
 	if s == nil || s.coreManager == nil || s.antigravityHomeEnabled() {
 		return
 	}
@@ -800,8 +804,8 @@ func (s *Service) refreshAntigravityModels(ctx context.Context) {
 		}
 		snapshot := auth.Clone()
 		key := s.antigravityCapabilityKey(snapshot)
-		token, _ := snapshot.Metadata["access_token"].(string)
-		failureKey := key + fmt.Sprintf("/%x", sha256.Sum256([]byte(strings.TrimSpace(token))))
+		token := coreauth.AuthMetadataString(snapshot, "access_token")
+		failureKey := key + fmt.Sprintf("/%x", sha256.Sum256([]byte(token)))
 		epoch := GlobalModelRegistry().ClientRegistrationEpoch(snapshot.ID)
 		antigravityCapabilityMu.RLock()
 		entry := antigravityCapabilityCache[key]
@@ -823,7 +827,12 @@ func (s *Service) scheduleAntigravityModelRefresh(ctx context.Context, auth *cor
 // nextAntigravityModelRefreshDelay preserves retry jitter in actual scheduling,
 // rather than rounding every account's deadline up to the same minute tick.
 // The upper bound still discovers accounts/config changes that bypass a wakeup.
-func (s *Service) nextAntigravityModelRefreshDelay() time.Duration {
+func (s *Service) nextAntigravityModelRefreshDelay() (res time.Duration) {
+	defer func() {
+		if r := recover(); r != nil {
+			res = antigravityRefreshScanInterval
+		}
+	}()
 	now := antigravityNowFunc()
 	next := now.Add(antigravityRefreshScanInterval)
 	if s == nil || s.coreManager == nil || s.antigravityHomeEnabled() {
@@ -834,8 +843,8 @@ func (s *Service) nextAntigravityModelRefreshDelay() time.Duration {
 			continue
 		}
 		key := s.antigravityCapabilityKey(auth)
-		token, _ := auth.Metadata["access_token"].(string)
-		failureKey := key + fmt.Sprintf("/%x", sha256.Sum256([]byte(strings.TrimSpace(token))))
+		token := coreauth.AuthMetadataString(auth, "access_token")
+		failureKey := key + fmt.Sprintf("/%x", sha256.Sum256([]byte(token)))
 		antigravityCapabilityMu.RLock()
 		retry := antigravityAuthFailureCache[failureKey].nextRetry
 		expiry := antigravityCapabilityCache[key].expiresAt
@@ -850,6 +859,11 @@ func (s *Service) nextAntigravityModelRefreshDelay() time.Duration {
 }
 
 func (s *Service) runAntigravityModelRefresh(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("runAntigravityModelRefresh recovered from panic: %v", r)
+		}
+	}()
 	wake := s.antigravityModelRefreshWake()
 	delay := s.nextAntigravityModelRefreshDelay()
 	deadline := antigravityNowFunc().Add(delay)

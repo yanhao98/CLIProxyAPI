@@ -49,6 +49,11 @@ func (s *Service) ensureAuthUpdateQueue(ctx context.Context) {
 }
 
 func (s *Service) consumeAuthUpdates(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("consumeAuthUpdates recovered from panic: %v", r)
+		}
+	}()
 	ctx = coreauth.WithSkipPersist(ctx)
 	for {
 		select {
@@ -68,7 +73,14 @@ func (s *Service) consumeAuthUpdates(ctx context.Context) {
 					break labelDrain
 				}
 			}
-			s.handleAuthUpdates(ctx, updates)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("handleAuthUpdates recovered from panic: %v", r)
+					}
+				}()
+				s.handleAuthUpdates(ctx, updates)
+			}()
 		}
 	}
 }

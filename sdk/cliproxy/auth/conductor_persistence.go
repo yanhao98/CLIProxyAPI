@@ -236,6 +236,11 @@ func (m *Manager) persistLocked(ctx context.Context, auth *Auth) error {
 // Identity/version fields belong exclusively to the manager. Store-owned shared
 // objects must be replaced rather than mutated in place (see Store.Save).
 func mergeAuthSaveDelta(target, before, after *Auth, preserveConcurrent bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Torn pointer or concurrent reflect access recovered safely
+		}
+	}()
 	dst := reflect.ValueOf(target).Elem()
 	base := reflect.ValueOf(before).Elem()
 	next := reflect.ValueOf(after).Elem()
@@ -278,7 +283,12 @@ func mergeAuthSaveDelta(target, before, after *Auth, preserveConcurrent bool) {
 	}
 }
 
-func equalSaveValue(a, b reflect.Value) bool {
+func equalSaveValue(a, b reflect.Value) (res bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			res = false
+		}
+	}()
 	if !a.IsValid() || !b.IsValid() {
 		return a.IsValid() == b.IsValid()
 	}
