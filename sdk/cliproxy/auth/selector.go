@@ -820,10 +820,17 @@ func (s *FillFirstSelector) Pick(ctx context.Context, provider, model string, op
 	return available[0], nil
 }
 
-func isAuthBlockedForModel(auth *Auth, model string, now time.Time) (bool, blockReason, time.Time) {
+func isAuthBlockedForModel(auth *Auth, model string, now time.Time) (blocked bool, reason blockReason, next time.Time) {
 	if auth == nil {
 		return true, blockReasonOther, time.Time{}
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			blocked = true
+			reason = blockReasonOther
+			next = time.Time{}
+		}
+	}()
 	if auth.Disabled || auth.Status == StatusDisabled {
 		return true, blockReasonDisabled, time.Time{}
 	}

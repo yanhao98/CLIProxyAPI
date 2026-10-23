@@ -131,17 +131,27 @@ func authHasOAuthMetadata(auth *Auth) bool {
 	return false
 }
 
-func authAttribute(auth *Auth, key string) string {
+func authAttribute(auth *Auth, key string) (res string) {
 	if auth == nil || auth.Attributes == nil {
 		return ""
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			res = ""
+		}
+	}()
 	return strings.TrimSpace(auth.Attributes[key])
 }
 
-func authMetadataString(auth *Auth, key string) string {
+func authMetadataString(auth *Auth, key string) (res string) {
 	if auth == nil || auth.Metadata == nil {
 		return ""
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			res = ""
+		}
+	}()
 	switch value := auth.Metadata[key].(type) {
 	case string:
 		return strings.TrimSpace(value)
