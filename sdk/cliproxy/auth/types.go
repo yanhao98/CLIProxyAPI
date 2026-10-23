@@ -1154,7 +1154,12 @@ func RegisterRefreshLeadProvider(provider string, factory func() *time.Duration)
 
 var expireKeys = [...]string{"expired", "expire", "expires_at", "expiresAt", "expiry", "expires"}
 
-func expirationFromMap(meta map[string]any) (time.Time, bool) {
+func expirationFromMap(meta map[string]any) (ts time.Time, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			ts, ok = time.Time{}, false
+		}
+	}()
 	if meta == nil {
 		return time.Time{}, false
 	}
@@ -1297,7 +1302,12 @@ func ProviderRefreshLead(provider string, runtime any) *time.Duration {
 	return nil
 }
 
-func parseTimeValue(v any) (time.Time, bool) {
+func parseTimeValue(v any) (ts time.Time, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			ts, ok = time.Time{}, false
+		}
+	}()
 	switch value := v.(type) {
 	case string:
 		s := strings.TrimSpace(value)
