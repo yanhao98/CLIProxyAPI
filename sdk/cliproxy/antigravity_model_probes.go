@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
+	log "github.com/sirupsen/logrus"
 )
 
 // antigravityModelRefreshRequest captures publication ownership at admission.
@@ -78,6 +79,11 @@ func (s *Service) queueAntigravityModelRefresh(ctx context.Context, auth *coreau
 }
 
 func (s *Service) runAntigravityAccountRefresh(authID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("runAntigravityAccountRefresh recovered from panic: %v", r)
+		}
+	}()
 	defer s.antigravityProbeWg.Done()
 	defer s.signalAntigravityModelRefresh()
 	for {

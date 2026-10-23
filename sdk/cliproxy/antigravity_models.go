@@ -288,7 +288,13 @@ func buildPersistedAntigravityCapabilityHintsValue(project, endpoint string, hin
 	return value
 }
 
-func parsePersistedAntigravityCapabilityHints(metadata map[string]any, expectedProject, expectedEndpoint string) (antigravityModelCapabilityHints, bool) {
+func parsePersistedAntigravityCapabilityHints(metadata map[string]any, expectedProject, expectedEndpoint string) (hints antigravityModelCapabilityHints, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			hints = antigravityModelCapabilityHints{}
+			ok = false
+		}
+	}()
 	if metadata == nil {
 		return antigravityModelCapabilityHints{}, false
 	}
