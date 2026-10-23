@@ -502,7 +502,12 @@ func jsonEqual(a, b []byte) bool {
 	return deepEqualJSON(objA, objB)
 }
 
-func deepEqualJSON(a, b any) bool {
+func deepEqualJSON(a, b any) (eq bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			eq = false
+		}
+	}()
 	switch valA := a.(type) {
 	case map[string]any:
 		valB, ok := b.(map[string]any)
