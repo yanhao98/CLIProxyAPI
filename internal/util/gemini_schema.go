@@ -1312,7 +1312,12 @@ func convertConstToEnum(jsonStr string) string {
 // convertEnumValuesToStrings ensures all enum values use the string representation required by
 // Gemini's proto schema. The declared type remains independent: Antigravity uses it to choose the
 // emitted JSON type on both response and function-argument paths.
-func convertEnumValuesToStrings(jsonStr string, forceStringType bool) string {
+func convertEnumValuesToStrings(jsonStr string, forceStringType bool) (out string) {
+	defer func() {
+		if r := recover(); r != nil {
+			out = jsonStr
+		}
+	}()
 	for _, p := range findPaths(jsonStr, "enum") {
 		arr := gjson.Get(jsonStr, p)
 		if !arr.IsArray() {

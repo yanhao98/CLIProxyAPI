@@ -490,6 +490,11 @@ func (e *AntigravityExecutor) queueAntigravityCreditsRefresh(ctx context.Context
 	authCopy := auth.Clone()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("queueAntigravityCreditsRefresh worker recovered from panic: %v", r)
+			}
+		}()
 		defer close(task.done)
 		defer task.cancel()
 		defer func() {

@@ -39,7 +39,12 @@ func ComputeGeminiModelsHash(models []config.GeminiModel) string {
 }
 
 // ComputeExcludedModelsHash returns a normalized hash for excluded model lists.
-func ComputeExcludedModelsHash(excluded []string) string {
+func ComputeExcludedModelsHash(excluded []string) (hash string) {
+	defer func() {
+		if r := recover(); r != nil {
+			hash = ""
+		}
+	}()
 	if len(excluded) == 0 {
 		return ""
 	}

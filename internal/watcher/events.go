@@ -46,6 +46,11 @@ func (w *Watcher) start(ctx context.Context) error {
 }
 
 func (w *Watcher) processEvents(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("Watcher.processEvents recovered from panic: %v", r)
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -54,7 +59,14 @@ func (w *Watcher) processEvents(ctx context.Context) {
 			if !ok {
 				return
 			}
-			w.handleEvent(event)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("Watcher.handleEvent recovered from panic: %v", r)
+					}
+				}()
+				w.handleEvent(event)
+			}()
 		case errWatch, ok := <-w.watcher.Errors:
 			if !ok {
 				return

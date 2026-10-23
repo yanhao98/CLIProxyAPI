@@ -1,6 +1,7 @@
 package helps
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptrace"
 
@@ -36,7 +37,19 @@ type antigravityConnectionTraceTransport struct {
 	operation string
 }
 
-func (t *antigravityConnectionTraceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *antigravityConnectionTraceTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("antigravity trace transport RoundTrip recovered from panic: %v", r)
+			err = fmt.Errorf("antigravity transport panic: %v", r)
+		}
+	}()
+	if t == nil || t.base == nil {
+		return http.DefaultTransport.RoundTrip(req)
+	}
+	if req == nil || req.URL == nil {
+		return nil, fmt.Errorf("antigravity trace: request or URL is nil")
+	}
 	return t.base.RoundTrip(WithAntigravityConnectionTrace(req, &t.auth, t.operation))
 }
 

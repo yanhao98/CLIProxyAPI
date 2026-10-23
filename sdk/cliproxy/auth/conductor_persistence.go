@@ -238,7 +238,9 @@ func (m *Manager) persistLocked(ctx context.Context, auth *Auth) error {
 func mergeAuthSaveDelta(target, before, after *Auth, preserveConcurrent bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Torn pointer or concurrent reflect access recovered safely
+			// A torn metadata read must not abort the caller, but a partially
+			// merged snapshot is not silent: log it so the odd state is visible.
+			log.Errorf("mergeAuthSaveDelta recovered from panic (partial merge): %v", r)
 		}
 	}()
 	dst := reflect.ValueOf(target).Elem()

@@ -123,7 +123,12 @@ func detectChangedProviders(oldData, newData *staticModelsJSON) []string {
 
 // modelSectionChanged reports whether two model slices differ, including
 // internal metadata that is intentionally omitted from normal JSON responses.
-func modelSectionChanged(a, b []*ModelInfo) bool {
+func modelSectionChanged(a, b []*ModelInfo) (changed bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			changed = true
+		}
+	}()
 	if len(a) != len(b) {
 		return true
 	}
