@@ -15,6 +15,7 @@ import (
 
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
+	log "github.com/sirupsen/logrus"
 )
 
 // PluginAuthParser parses auth JSON owned by plugin providers.
@@ -72,7 +73,13 @@ func (s *FileTokenStore) SetBaseDir(dir string) {
 }
 
 // Save persists token storage and metadata to the resolved auth file path.
-func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (string, error) {
+func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (pathRet string, errRet error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("FileTokenStore.Save recovered from panic during token save: %v", r)
+			errRet = fmt.Errorf("auth filestore: token save panic: %v", r)
+		}
+	}()
 	if auth == nil {
 		return "", fmt.Errorf("auth filestore: auth is nil")
 	}

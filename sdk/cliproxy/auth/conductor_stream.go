@@ -7,6 +7,7 @@ import (
 	"time"
 
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+	log "github.com/sirupsen/logrus"
 )
 
 func discardStreamChunks(ch <-chan cliproxyexecutor.StreamChunk) {
@@ -146,6 +147,11 @@ func (m *Manager) wrapStreamResult(ctx context.Context, auth *Auth, provider, re
 	out := make(chan cliproxyexecutor.StreamChunk)
 	streamStart := time.Now()
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("wrapStreamResult background worker recovered from panic: %v", r)
+			}
+		}()
 		defer close(out)
 		var failed bool
 		forward := true
