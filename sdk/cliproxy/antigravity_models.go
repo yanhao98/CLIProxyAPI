@@ -406,7 +406,14 @@ func (s *Service) fetchAntigravityModelCapabilityHints(ctx context.Context, auth
 	}
 	// The initiating caller owns the shared HTTP operation. Followers may cancel
 	// their own wait without canceling that operation or blocking a refresh worker.
-	resultCh := antigravityCapabilityGroup.DoChan(failureKey, func() (any, error) {
+	resultCh := antigravityCapabilityGroup.DoChan(failureKey, func() (res any, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("fetchAntigravityModelCapabilityHints singleflight recovered from panic: %v", r)
+				res = s.cachedAntigravityHintsForKey(auth, baseURLs[0], cacheKey)
+				err = nil
+			}
+		}()
 		if hints, cached := lookup(); cached {
 			return hints, nil
 		}
@@ -484,7 +491,14 @@ func (s *Service) fetchAntigravityModelCapabilityHints(ctx context.Context, auth
 	}
 }
 
-func (s *Service) probeAntigravityModelCapabilityHints(ctx context.Context, auth *coreauth.Auth, baseURLs []string, proxyURL, accessToken, userAgent string) (antigravityModelCapabilityHints, antigravityProbeStatus) {
+func (s *Service) probeAntigravityModelCapabilityHints(ctx context.Context, auth *coreauth.Auth, baseURLs []string, proxyURL, accessToken, userAgent string) (hintsRet antigravityModelCapabilityHints, statusRet antigravityProbeStatus) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("probeAntigravityModelCapabilityHints recovered from panic: %v", r)
+			hintsRet = antigravityModelCapabilityHints{}
+			statusRet = antigravityProbeStatusTransientError
+		}
+	}()
 	if len(baseURLs) == 0 {
 		return antigravityModelCapabilityHints{}, antigravityProbeStatusTransientError
 	}
@@ -497,7 +511,15 @@ func (s *Service) probeAntigravityModelCapabilityHints(ctx context.Context, auth
 		client.Transport = transport
 		defer transport.CloseIdleConnections()
 	}
-	project, _ := auth.Metadata["project_id"].(string)
+	project := ""
+	if auth != nil && auth.Metadata != nil {
+		func() {
+			defer func() { _ = recover() }()
+			if p, ok := auth.Metadata["project_id"].(string); ok {
+				project = strings.TrimSpace(p)
+			}
+		}()
+	}
 	body, errMarshal := json.Marshal(map[string]string{"project": project})
 	if errMarshal != nil {
 		return antigravityModelCapabilityHints{}, antigravityProbeStatusTransientError
