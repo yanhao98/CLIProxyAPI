@@ -488,7 +488,19 @@ type authFileQuotaContext struct {
 	v8 bool
 }
 
-func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, quota authFileQuotaContext) gin.H {
+func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, quota authFileQuotaContext) (entry gin.H) {
+	defer func() {
+		if r := recover(); r != nil {
+			if auth != nil {
+				entry = gin.H{
+					"id":       auth.ID,
+					"name":     filepath.Base(auth.FileName),
+					"provider": auth.Provider,
+					"status":   auth.Status,
+				}
+			}
+		}
+	}()
 	authFileEntryMu.Lock()
 	defer authFileEntryMu.Unlock()
 	return h.buildAuthFileEntryLocked(auth, quota)
@@ -957,7 +969,12 @@ func extractCodexIDTokenClaims(auth *coreauth.Auth) gin.H {
 	return result
 }
 
-func authEmail(auth *coreauth.Auth) string {
+func authEmail(auth *coreauth.Auth) (email string) {
+	defer func() {
+		if r := recover(); r != nil {
+			email = ""
+		}
+	}()
 	if auth == nil {
 		return ""
 	}
