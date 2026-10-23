@@ -307,9 +307,25 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 		}
 	}
 	m.mu.Lock()
+	muHeld := true
+	unlock := func() {
+		if muHeld {
+			m.mu.Unlock()
+			muHeld = false
+		}
+	}
+	// A panic raised while the write lock is held must never leave the
+	// manager mutex locked: that wedges every later selection and request.
+	defer func() {
+		if r := recover(); r != nil {
+			unlock()
+			committedAuth, committed, persistCooldown = nil, false, false
+			err = fmt.Errorf("update auth recovered from panic: %v", r)
+		}
+	}()
 	existing, ok := m.auths[auth.ID]
 	if !ok || existing == nil {
-		m.mu.Unlock()
+		unlock()
 		return nil, false, false, nil
 	}
 	if m.authEpochs == nil {
@@ -319,14 +335,14 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 		m.authEpochs[auth.ID] = existing.RegistrationEpoch
 	}
 	if (mode == updateModeRefresh || mode == updateModePrepare) && base != nil && existing.RegistrationEpoch != base.RegistrationEpoch {
-		m.mu.Unlock()
+		unlock()
 		return nil, false, false, fmt.Errorf("update auth %s: stale registration epoch %d != %d", auth.ID, base.RegistrationEpoch, existing.RegistrationEpoch)
 	}
 	// Do not let an in-flight refresh overwrite credentials committed after its snapshot.
 	if mode == updateModeRefresh && base != nil && (existing.CredentialVersion != base.CredentialVersion || CredentialsChanged(base, existing)) {
 		if auth.CodexRefreshPatch == nil || !auth.CodexRefreshPatch.CanApplyTo(existing.Metadata) {
 			current := existing.Clone()
-			m.mu.Unlock()
+			unlock()
 			// Discarded stale refresh: committed=false so callers do not
 			// run finishAuthUpdate for a state this call did not change.
 			return current, false, false, nil
@@ -346,7 +362,7 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 		}
 	}
 	if auth.RegistrationEpoch != 0 && auth.RegistrationEpoch < m.authEpochs[auth.ID] {
-		m.mu.Unlock()
+		unlock()
 		return nil, false, false, fmt.Errorf("update auth %s: stale registration epoch %d < %d", auth.ID, auth.RegistrationEpoch, m.authEpochs[auth.ID])
 	}
 	if auth.RegistrationEpoch >= m.authEpochs[auth.ID] {
@@ -470,14 +486,14 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 	if errPersist := m.persistLocked(ctx, auth); errPersist != nil {
 		// A minted Meta key must reach the store before requests can use it.
 		if persistMetaMint {
-			m.mu.Unlock()
+			unlock()
 			return nil, false, false, fmt.Errorf("persist meta auth: %w", errPersist)
 		}
 		// Ordinary persistence failures remain non-fatal, but never silent.
 		log.WithFields(log.Fields{"auth_id": auth.ID, "credential": auth.ID, "provider": auth.Provider}).Warnf("failed to persist updated auth %s (%s): %v", auth.Provider, auth.ID, errPersist)
 	}
 	if m.authEpochs[auth.ID] != auth.RegistrationEpoch {
-		m.mu.Unlock()
+		unlock()
 		return nil, false, false, fmt.Errorf("auth %s changed registration during persistence", auth.ID)
 	}
 	mergeAuthSaveDelta(auth, existingBeforeSave, existing, false)
@@ -500,7 +516,7 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 	if m.scheduler != nil {
 		schedulerSnapshot = authClone.Clone()
 	}
-	m.mu.Unlock()
+	unlock()
 	_ = schedulerSnapshot
 	return auth.Clone(), true, cooldownStateChanged, nil
 }
