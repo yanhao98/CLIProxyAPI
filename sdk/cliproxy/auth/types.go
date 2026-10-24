@@ -785,19 +785,21 @@ func parseIntAny(val any) (int, bool) {
 	}
 }
 
-func (a *Auth) AccountInfo() (string, string) {
+func (a *Auth) AccountInfo() (kind string, account string) {
+	defer func() {
+		if r := recover(); r != nil {
+			kind, account = "oauth", ""
+		}
+	}()
 	if a == nil {
 		return "", ""
 	}
 	switch a.AuthKind() {
 	case AuthKindOAuth:
+		if email := authMetadataString(a, "email"); email != "" {
+			return "oauth", email
+		}
 		if a.Metadata != nil {
-			if v, ok := a.Metadata["email"].(string); ok {
-				email := strings.TrimSpace(v)
-				if email != "" {
-					return "oauth", email
-				}
-			}
 			if sa, ok := a.Metadata["service_account"].(map[string]any); ok {
 				if v, okEmail := sa["client_email"].(string); okEmail {
 					email := strings.TrimSpace(v)
