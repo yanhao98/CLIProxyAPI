@@ -1298,7 +1298,13 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	return auth, nil
 }
 
-func (s *SessionAffinitySelector) pickLCP(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth, entry *log.Entry) (*Auth, bool, error) {
+func (s *SessionAffinitySelector) pickLCP(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth, entry *log.Entry) (selected *Auth, handled bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warnf("pickLCP recovered from panic: %v", r)
+			selected, handled, err = nil, false, nil
+		}
+	}()
 	if s == nil || s.matcher == nil {
 		return nil, false, nil
 	}

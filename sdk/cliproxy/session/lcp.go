@@ -86,7 +86,12 @@ func writeFingerprintField(hash interface{ Write([]byte) (int, error) }, value s
 
 // ExtractCanonicalTurns extracts all logical turns from the five supported inbound protocols.
 // Invalid or empty payloads return an empty slice.
-func ExtractCanonicalTurns(format sdktranslator.Format, payload []byte) []CanonicalTurn {
+func ExtractCanonicalTurns(format sdktranslator.Format, payload []byte) (turns []CanonicalTurn) {
+	defer func() {
+		if r := recover(); r != nil {
+			turns = nil
+		}
+	}()
 	if len(payload) == 0 {
 		return nil
 	}
@@ -98,7 +103,7 @@ func ExtractCanonicalTurns(format sdktranslator.Format, payload []byte) []Canoni
 		format = inferCanonicalFormat(root)
 	}
 
-	turns := make([]CanonicalTurn, 0)
+	turns = make([]CanonicalTurn, 0)
 	switch {
 	case formatEqual(format, sdktranslator.FormatClaude):
 		appendMessagesTurns(&turns, root, true)
@@ -409,8 +414,13 @@ func canonicalResourcePart(value gjson.Result) CanonicalPart {
 	return part
 }
 
-func canonicalJSONPart(kind string, value gjson.Result) CanonicalPart {
+func canonicalJSONPart(kind string, value gjson.Result) (part CanonicalPart) {
 	raw := value.Raw
+	defer func() {
+		if r := recover(); r != nil {
+			part = CanonicalPart{Kind: kind, Value: raw, OriginalSize: len(raw)}
+		}
+	}()
 	if len(raw) > largePartThreshold {
 		return CanonicalPart{
 			Kind:         kind,
