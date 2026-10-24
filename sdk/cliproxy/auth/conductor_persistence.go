@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"context"
 	"reflect"
 	"sync"
@@ -221,14 +222,20 @@ func (m *Manager) lockAuthMutationWithPersistCancel(ctx context.Context, id stri
 // persistLocked requires m.mu and the credential mutation gate. Never pass a
 // published object to Store.Save: readers and runtime-only writers remain live
 // during I/O. Only the store's delta is merged back, preserving intervening edits.
-func (m *Manager) persistLocked(ctx context.Context, auth *Auth) error {
+func (m *Manager) persistLocked(ctx context.Context, auth *Auth) (errRet error) {
 	before := auth.Clone()
 	saved := auth.Clone()
 	m.mu.Unlock()
-	err := m.persist(ctx, saved)
-	m.mu.Lock()
-	mergeAuthSaveDelta(auth, before, saved, true)
-	return err
+	defer func() {
+		m.mu.Lock()
+		if r := recover(); r != nil {
+			log.Errorf("persistLocked recovered from panic during persist: %v", r)
+			errRet = fmt.Errorf("persist panic: %v", r)
+		}
+		mergeAuthSaveDelta(auth, before, saved, true)
+	}()
+	errRet = m.persist(ctx, saved)
+	return errRet
 }
 
 // mergeAuthSaveDelta handles all exported value fields, not a store-specific

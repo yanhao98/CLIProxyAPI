@@ -694,7 +694,13 @@ type authPersistLock struct {
 	lastGeneration uint64
 }
 
-func (m *Manager) persist(ctx context.Context, auth *Auth) error {
+func (m *Manager) persist(ctx context.Context, auth *Auth) (errRet error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("Manager.persist recovered from panic: %v", r)
+			errRet = fmt.Errorf("persist panic: %v", r)
+		}
+	}()
 	m.mu.RLock()
 	store := m.store
 	m.mu.RUnlock()
