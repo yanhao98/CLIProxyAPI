@@ -243,6 +243,9 @@ func mergeAuthSaveDelta(target, before, after *Auth, preserveConcurrent bool) {
 			log.Errorf("mergeAuthSaveDelta recovered from panic (partial merge): %v", r)
 		}
 	}()
+	if target == nil || before == nil || after == nil {
+		return
+	}
 	dst := reflect.ValueOf(target).Elem()
 	base := reflect.ValueOf(before).Elem()
 	next := reflect.ValueOf(after).Elem()

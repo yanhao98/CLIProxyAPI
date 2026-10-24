@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"runtime/debug"
 	"context"
 	"fmt"
 	"math"
@@ -320,6 +321,7 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 		if r := recover(); r != nil {
 			unlock()
 			committedAuth, committed, persistCooldown = nil, false, false
+			log.Errorf("updateInternalLocked recovered from panic: %v\nstack:\n%s", r, string(debug.Stack()))
 			err = fmt.Errorf("update auth recovered from panic: %v", r)
 		}
 	}()

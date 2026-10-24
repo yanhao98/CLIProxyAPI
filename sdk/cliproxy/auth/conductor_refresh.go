@@ -1156,6 +1156,12 @@ func (m *Manager) refreshAuthForRequestAtEpoch(ctx context.Context, id, failedAc
 	if errUpdate != nil {
 		// Warn, not debug: a restart after a lost persist fails with invalid_grant.
 		log.WithFields(log.Fields{"auth_id": auth.ID, "credential": auth.ID, "provider": auth.Provider}).Warnf("persist refreshed auth %s (%s) failed: %v", auth.Provider, auth.ID, errUpdate)
+		m.mu.Lock()
+		if current := m.auths[id]; current != nil {
+			current.NextRefreshAfter = time.Now().Add(2 * time.Minute)
+			m.auths[id] = current
+		}
+		m.mu.Unlock()
 		return nil, errUpdate
 	}
 	if saved == nil {

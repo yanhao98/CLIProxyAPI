@@ -101,15 +101,21 @@ func (l *authAutoRefreshLoop) worker(ctx context.Context) {
 				continue
 			}
 			func() {
+				var refreshErr error
+				retryAt := time.Time{}
 				defer func() {
 					if r := recover(); r != nil {
 						log.Errorf("auth auto-refresh worker recovered from panic: %v", r)
+						retryAt = time.Now().Add(2 * time.Minute)
 					}
+					l.manager.finishRefreshJob(job, retryAt, false)
 				}()
 				if l.manager.beginRefreshJob(ctx, job) {
-					_, _ = l.manager.refreshAuthForRequestAtEpoch(ctx, job.id, "", job.registrationEpoch)
+					_, refreshErr = l.manager.refreshAuthForRequestAtEpoch(ctx, job.id, "", job.registrationEpoch)
+					if refreshErr != nil {
+						retryAt = time.Now().Add(2 * time.Minute)
+					}
 				}
-				l.manager.finishRefreshJob(job, time.Time{}, false)
 			}()
 		}
 	}

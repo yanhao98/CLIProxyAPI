@@ -107,6 +107,9 @@ func MergeRefreshedAuth(base, current, updated *Auth) *Auth {
 		finalDisabled = updatedDisabled
 	}
 
+	if merged.Metadata == nil {
+		merged.Metadata = make(map[string]any)
+	}
 	if finalDisabled {
 		merged.Disabled = true
 		merged.Status = StatusDisabled
