@@ -1,6 +1,7 @@
 package auth
 
 import (
+	log "github.com/sirupsen/logrus"
 	"reflect"
 	"strings"
 	"time"
@@ -203,7 +204,17 @@ func MergeRefreshedAuth(base, current, updated *Auth) *Auth {
 	return merged
 }
 
-func mergeAuthContent(base, current, updated *Auth) *Auth {
+func mergeAuthContent(base, current, updated *Auth) (mergedAuth *Auth) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("mergeAuthContent recovered from panic: %v", r)
+			if current != nil {
+				mergedAuth = current.Clone()
+			} else if updated != nil {
+				mergedAuth = updated.Clone()
+			}
+		}
+	}()
 	if current == nil {
 		if updated != nil {
 			return updated.Clone()

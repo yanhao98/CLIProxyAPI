@@ -9,7 +9,12 @@ import (
 
 // AccessTokenSHA256 returns the normalized OAuth access-token fingerprint used
 // to fence asynchronous Home execution results without exposing the token.
-func AccessTokenSHA256(auth *Auth) string {
+func AccessTokenSHA256(auth *Auth) (hash string) {
+	defer func() {
+		if r := recover(); r != nil {
+			hash = ""
+		}
+	}()
 	accessToken := accessTokenForFingerprint(auth)
 	if accessToken == "" {
 		return ""
@@ -43,13 +48,18 @@ func NotifyAccessTokenFingerprint(ctx context.Context, auth *Auth) {
 	}
 }
 
-func accessTokenForFingerprint(auth *Auth) string {
-	if auth == nil || auth.Metadata == nil {
+func accessTokenForFingerprint(auth *Auth) (token string) {
+	defer func() {
+		if r := recover(); r != nil {
+			token = ""
+		}
+	}()
+	if auth == nil {
 		return ""
 	}
 	for _, key := range []string{"access_token", "accessToken"} {
-		if value, ok := auth.Metadata[key].(string); ok && strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if val := authMetadataString(auth, key); val != "" {
+			return val
 		}
 	}
 	for _, key := range []string{"token", "Token"} {
