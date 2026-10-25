@@ -204,6 +204,15 @@ func MergeRefreshedAuth(base, current, updated *Auth) *Auth {
 	return merged
 }
 
+func safeDeepEqual(a, b any) (eq bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			eq = false
+		}
+	}()
+	return reflect.DeepEqual(a, b)
+}
+
 func mergeAuthContent(base, current, updated *Auth) (mergedAuth *Auth) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -279,8 +288,8 @@ func mergeAuthContent(base, current, updated *Auth) (mergedAuth *Auth) {
 			baseVal, hadInBase := baseMeta[k]
 			currentVal, hadInCurrent := current.Metadata[k]
 
-			changedByExecutor := !hadInBase || !reflect.DeepEqual(baseVal, v)
-			changedByUser := hadInBase != hadInCurrent || (hadInBase && !reflect.DeepEqual(baseVal, currentVal))
+			changedByExecutor := !hadInBase || !safeDeepEqual(baseVal, v)
+			changedByUser := hadInBase != hadInCurrent || (hadInBase && !safeDeepEqual(baseVal, currentVal))
 
 			if changedByExecutor {
 				// Apply executor change if user didn't modify it, or if it is a token payload field

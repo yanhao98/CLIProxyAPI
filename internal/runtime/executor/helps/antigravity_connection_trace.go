@@ -41,6 +41,12 @@ func (t *antigravityConnectionTraceTransport) RoundTrip(req *http.Request) (resp
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("antigravity trace transport RoundTrip recovered from panic: %v", r)
+			// Fallback: retry with underlying proxy transport directly, stripping trace hook
+			// while strictly preserving the configured proxy (e.g. resin:2260)
+			if t != nil && t.base != nil && req != nil {
+				resp, err = t.base.RoundTrip(req)
+				return
+			}
 			err = fmt.Errorf("antigravity transport panic: %v", r)
 		}
 	}()
