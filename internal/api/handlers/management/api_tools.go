@@ -102,6 +102,12 @@ type apiCallResponse struct {
 //	  -H "Content-Type: application/json" \
 //	  -d '{"auth_index":"<AUTH_INDEX>","method":"POST","url":"https://api.example.com/v1/fetchAvailableModels","header":{"Authorization":"Bearer $TOKEN$","Content-Type":"application/json","User-Agent":"cliproxyapi"},"data":"{}"}'
 func (h *Handler) APICall(c *gin.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("management APICall recovered from panic: %v", r)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("api-call internal error: %v", r)})
+		}
+	}()
 	var body apiCallRequest
 	if errBindJSON := c.ShouldBindJSON(&body); errBindJSON != nil {
 		c.JSON(clienterror.HTTPStatusFromErrorOr(errBindJSON, http.StatusBadRequest), gin.H{"error": "invalid body"})
@@ -620,7 +626,14 @@ func (h *Handler) refreshAntigravityOAuthAccessToken(ctx context.Context, auth *
 	if h != nil && h.authManager != nil {
 		auth.LastRefreshedAt = now
 		auth.UpdatedAt = now
-		_, _ = h.authManager.Update(ctx, auth)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("refreshAntigravityOAuthAccessToken: update auth manager recovered from panic: %v", r)
+				}
+			}()
+			_, _ = h.authManager.Update(ctx, auth)
+		}()
 	}
 
 	return strings.TrimSpace(tokenResp.AccessToken), nil

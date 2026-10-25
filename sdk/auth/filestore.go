@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -72,27 +73,41 @@ func (s *FileTokenStore) SetBaseDir(dir string) {
 	s.dirLock.Unlock()
 }
 
+func deepCloneAny(val any) any {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case map[string]any:
+		return deepCloneMetadataMap(v)
+	case []any:
+		sCopy := make([]any, len(v))
+		for i, item := range v {
+			sCopy[i] = deepCloneAny(item)
+		}
+		return sCopy
+	case []string:
+		sCopy := make([]string, len(v))
+		copy(sCopy, v)
+		return sCopy
+	default:
+		return v
+	}
+}
+
 // Save persists token storage and metadata to the resolved auth file path.
-func deepCloneMetadataMap(m map[string]any) map[string]any {
+func deepCloneMetadataMap(m map[string]any) (out map[string]any) {
 	if m == nil {
 		return nil
 	}
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		switch val := v.(type) {
-		case map[string]any:
-			out[k] = deepCloneMetadataMap(val)
-		case []any:
-			sCopy := make([]any, len(val))
-			copy(sCopy, val)
-			out[k] = sCopy
-		case []string:
-			sCopy := make([]string, len(val))
-			copy(sCopy, val)
-			out[k] = sCopy
-		default:
-			out[k] = v
+	defer func() {
+		if r := recover(); r != nil {
+			out = nil
 		}
+	}()
+	out = make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = deepCloneAny(v)
 	}
 	return out
 }
@@ -100,7 +115,7 @@ func deepCloneMetadataMap(m map[string]any) map[string]any {
 func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (pathRet string, errRet error) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("FileTokenStore.Save recovered from panic during token save: %v", r)
+			log.Errorf("FileTokenStore.Save recovered from panic during token save: %v\n%s", r, debug.Stack())
 			errRet = fmt.Errorf("auth filestore: token save panic: %v", r)
 		}
 	}()
@@ -161,19 +176,15 @@ func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (pat
 		case auth.Metadata != nil:
 			auth.Metadata["disabled"] = auth.Disabled
 			var metaCopy map[string]any
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						// ignore concurrent read tear
-					}
-				}()
+			for attempt := 0; attempt < 3; attempt++ {
 				metaCopy = deepCloneMetadataMap(auth.Metadata)
-			}()
-			if metaCopy == nil {
-				metaCopy = make(map[string]any, len(auth.Metadata))
-				for k, v := range auth.Metadata {
-					metaCopy[k] = v
+				if metaCopy != nil {
+					break
 				}
+				time.Sleep(2 * time.Millisecond)
+			}
+			if metaCopy == nil {
+				return "", fmt.Errorf("auth filestore: failed to snapshot metadata for %s due to concurrent mutation", auth.ID)
 			}
 			raw, errMarshal := json.Marshal(metaCopy)
 			if errMarshal != nil {

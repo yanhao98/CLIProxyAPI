@@ -944,8 +944,7 @@ func (m *Manager) refreshAuthForRequestAtEpoch(ctx context.Context, id, failedAc
 		m.markRejectedAccessToken(id, failedAccessToken)
 	}
 
-	lockValue, _ := m.refreshLocks.LoadOrStore(id, &authRefreshLock{})
-	lock, _ := lockValue.(*authRefreshLock)
+	lock, _ := m.refreshLocks.LoadOrStore(id, &authRefreshLock{})
 	if lock == nil {
 		lock = &authRefreshLock{}
 		m.refreshLocks.Store(id, lock)

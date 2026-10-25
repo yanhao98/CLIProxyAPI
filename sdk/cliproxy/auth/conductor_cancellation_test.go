@@ -156,7 +156,7 @@ func TestManagerCanceledMutationWait(t *testing.T) {
 						manager.authLoadGate.Release(math.MaxInt64)
 					}
 					value, _ := manager.authMutationLocks.Load(base.ID)
-					if len(value.(chan struct{})) != 0 {
+					if len(value) != 0 {
 						t.Error("mutation leaked credential gate")
 					}
 				})

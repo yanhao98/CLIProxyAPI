@@ -231,16 +231,16 @@ type Manager struct {
 	// refreshJobs retains queued and running jobs across loop restarts under m.mu.
 	refreshJobs map[string]*authRefreshJob
 
-	requestPrepareLocks sync.Map
+	requestPrepareLocks shardedMap[*requestAuthPrepareLock]
 	// refreshLocks serializes credential refresh per auth ID so concurrent
 	// 401 recoveries and auto-refresh workers do not race the same refresh_token.
-	refreshLocks sync.Map
+	refreshLocks shardedMap[*authRefreshLock]
 	// persistLocks serializes disk persistence per auth ID and guards against out-of-order writes.
-	persistLocks sync.Map
+	persistLocks shardedMap[*authPersistLock]
 	// authMutationLocks coordinate credential mutations without blocking unrelated readers.
-	authMutationLocks      sync.Map
-	metadataPersistCancels sync.Map
-	metadataSaveGate       sync.Map
+	authMutationLocks      shardedMap[chan struct{}]
+	metadataPersistCancels shardedMap[*metadataPersistPreemptState]
+	metadataSaveGate       shardedMap[any]
 	// authLoadGate allows concurrent credential transactions, but excludes whole-store reloads.
 	// Mutations acquire one permit; Load acquires all permits before reading the store.
 	authLoadGate *semaphore.Weighted

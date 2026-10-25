@@ -1517,9 +1517,8 @@ func (m *Manager) prepareHomeAuthSnapshot(ctx context.Context, executor Provider
 	if id == "" {
 		return prepare()
 	}
-	lockValue, _ := m.requestPrepareLocks.LoadOrStore(id, &requestAuthPrepareLock{})
-	lock, ok := lockValue.(*requestAuthPrepareLock)
-	if !ok || lock == nil {
+	lock, _ := m.requestPrepareLocks.LoadOrStore(id, &requestAuthPrepareLock{})
+	if lock == nil {
 		return prepare()
 	}
 	lock.mu.Lock()
@@ -1554,11 +1553,11 @@ func (m *Manager) PrepareRequestAuth(ctx context.Context, preparer RequestAuthPr
 	var prepareMu *sync.Mutex
 	if strings.EqualFold(strings.TrimSpace(auth.Provider), "meta") {
 		// Meta also mints on 401 recovery. Serialize both paths per credential.
-		lockValue, _ := m.refreshLocks.LoadOrStore(id, &authRefreshLock{})
-		prepareMu = &lockValue.(*authRefreshLock).mu
+		lock, _ := m.refreshLocks.LoadOrStore(id, &authRefreshLock{})
+		prepareMu = &lock.mu
 	} else {
-		lockValue, _ := m.requestPrepareLocks.LoadOrStore(id, &requestAuthPrepareLock{})
-		prepareMu = &lockValue.(*requestAuthPrepareLock).mu
+		lock, _ := m.requestPrepareLocks.LoadOrStore(id, &requestAuthPrepareLock{})
+		prepareMu = &lock.mu
 	}
 	prepareMu.Lock()
 	defer prepareMu.Unlock()

@@ -43,7 +43,7 @@ func isMetadataPersistContext(ctx context.Context) bool {
 
 func (m *Manager) metadataPersistPreempt(id string) *metadataPersistPreemptState {
 	val, _ := m.metadataPersistCancels.LoadOrStore(id, &metadataPersistPreemptState{})
-	return val.(*metadataPersistPreemptState)
+	return val
 }
 
 func (m *Manager) globalMetadataSaveState() *metadataPersistPreemptState {
@@ -163,11 +163,15 @@ func (m *Manager) lockAuthMutationWithPersistCancel(ctx context.Context, id stri
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("lockAuthMutationWithPersistCancel recovered from panic for %s: %v", id, r)
+		}
+	}()
 	if errAcquire := m.authLoadGate.Acquire(ctx, 1); errAcquire != nil {
 		return nil, errAcquire
 	}
-	value, _ := m.authMutationLocks.LoadOrStore(id, make(chan struct{}, 1))
-	gate := value.(chan struct{})
+	gate, _ := m.authMutationLocks.LoadOrStore(id, make(chan struct{}, 1))
 	state := m.metadataPersistPreempt(id)
 	if persistCancel == nil {
 		state.mu.Lock()

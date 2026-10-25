@@ -470,26 +470,40 @@ func (a *Auth) Clone() *Auth {
 	return &copyAuth
 }
 
-func cloneMetadataMap(src map[string]any) map[string]any {
+func cloneMetadataAny(val any) any {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case map[string]any:
+		return cloneMetadataMap(v)
+	case []any:
+		s := make([]any, len(v))
+		for i, item := range v {
+			s[i] = cloneMetadataAny(item)
+		}
+		return s
+	case []string:
+		s := make([]string, len(v))
+		copy(s, v)
+		return s
+	default:
+		return v
+	}
+}
+
+func cloneMetadataMap(src map[string]any) (dst map[string]any) {
 	if src == nil {
 		return nil
 	}
-	dst := make(map[string]any, len(src))
-	for key, value := range src {
-		switch typed := value.(type) {
-		case map[string]any:
-			dst[key] = cloneMetadataMap(typed)
-		case []string:
-			s := make([]string, len(typed))
-			copy(s, typed)
-			dst[key] = s
-		case []any:
-			s := make([]any, len(typed))
-			copy(s, typed)
-			dst[key] = s
-		default:
-			dst[key] = value
+	defer func() {
+		if r := recover(); r != nil {
+			dst = nil
 		}
+	}()
+	dst = make(map[string]any, len(src))
+	for key, value := range src {
+		dst[key] = cloneMetadataAny(value)
 	}
 	return dst
 }
