@@ -493,6 +493,7 @@ func (m *Manager) updateInternalLocked(ctx context.Context, base, auth *Auth, mo
 		}
 		// Ordinary persistence failures remain non-fatal, but never silent.
 		log.WithFields(log.Fields{"auth_id": auth.ID, "credential": auth.ID, "provider": auth.Provider}).Warnf("failed to persist updated auth %s (%s): %v", auth.Provider, auth.ID, errPersist)
+		auth.NextRefreshAfter = time.Now().Add(2 * time.Minute)
 	}
 	if m.authEpochs[auth.ID] != auth.RegistrationEpoch {
 		unlock()

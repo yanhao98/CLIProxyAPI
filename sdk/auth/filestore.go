@@ -136,7 +136,18 @@ func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (pat
 			}
 		case auth.Metadata != nil:
 			auth.Metadata["disabled"] = auth.Disabled
-			raw, errMarshal := json.Marshal(auth.Metadata)
+			metaCopy := make(map[string]any, len(auth.Metadata))
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// ignore concurrent read tear
+					}
+				}()
+				for k, v := range auth.Metadata {
+					metaCopy[k] = v
+				}
+			}()
+			raw, errMarshal := json.Marshal(metaCopy)
 			if errMarshal != nil {
 				return "", fmt.Errorf("auth filestore: marshal metadata failed: %w", errMarshal)
 			}

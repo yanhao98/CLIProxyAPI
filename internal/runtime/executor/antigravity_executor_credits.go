@@ -359,6 +359,11 @@ func newAntigravityStatusErr(statusCode int, body []byte) statusErr {
 	return err
 }
 func (e *AntigravityExecutor) maybeRefreshAntigravityCreditsHint(ctx context.Context, auth *cliproxyauth.Auth, accessToken string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warnf("maybeRefreshAntigravityCreditsHint recovered from panic: %v", r)
+		}
+	}()
 	if e == nil || auth == nil || !antigravityCreditsRetryEnabled(e.cfg) || antigravityCoolingDisabled(auth, e.cfg) {
 		return
 	}
@@ -411,6 +416,11 @@ func (e *AntigravityExecutor) maybeRefreshAntigravityCreditsHint(ctx context.Con
 }
 
 func (e *AntigravityExecutor) queueAntigravityCreditsRefresh(ctx context.Context, auth *cliproxyauth.Auth, accessToken string, timeout time.Duration) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warnf("queueAntigravityCreditsRefresh recovered from panic: %v", r)
+		}
+	}()
 	if e == nil || auth == nil || (ctx != nil && ctx.Err() != nil) {
 		return
 	}
