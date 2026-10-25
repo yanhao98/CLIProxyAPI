@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,6 +16,22 @@ import (
 )
 
 const embeddedCatalogSource = "embed"
+
+var catalogHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	},
+}
 
 // catalogUpdater serializes source changes with publication, not network I/O.
 // Cancellation saves work; the generation check also protects against readers
@@ -50,6 +67,11 @@ func (u *catalogUpdater) configure(ctx context.Context, source string) {
 	}
 	generation := u.generation
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("catalogUpdater background worker recovered from panic: %v", r)
+			}
+		}()
 		u.refresh(refreshCtx, source, generation)
 		if source == embeddedCatalogSource {
 			return
@@ -68,6 +90,11 @@ func (u *catalogUpdater) configure(ctx context.Context, source string) {
 }
 
 func (u *catalogUpdater) refresh(ctx context.Context, source string, generation uint64) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("catalogUpdater.refresh recovered from panic for %s: %v", source, r)
+		}
+	}()
 	data, errFetch := u.fetch(ctx, source)
 	if errFetch != nil {
 		if ctx.Err() == nil {
@@ -89,7 +116,13 @@ func (u *catalogUpdater) refresh(ctx context.Context, source string, generation 
 	notifyModelRefresh(changed)
 }
 
-func readCatalogSource(ctx context.Context, source string) ([]byte, error) {
+func readCatalogSource(ctx context.Context, source string) (dataRet []byte, errRet error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("readCatalogSource recovered from panic for %s: %v", source, r)
+			errRet = fmt.Errorf("read catalog source panic: %v", r)
+		}
+	}()
 	var reader io.ReadCloser
 	if filepath.IsAbs(source) {
 		file, errOpen := os.Open(source)
@@ -102,7 +135,7 @@ func readCatalogSource(ctx context.Context, source string) ([]byte, error) {
 		if errRequest != nil {
 			return nil, errRequest
 		}
-		resp, errDo := http.DefaultClient.Do(req)
+		resp, errDo := catalogHTTPClient.Do(req)
 		if errDo != nil {
 			return nil, errDo
 		}
