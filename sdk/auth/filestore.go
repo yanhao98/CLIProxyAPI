@@ -73,6 +73,30 @@ func (s *FileTokenStore) SetBaseDir(dir string) {
 }
 
 // Save persists token storage and metadata to the resolved auth file path.
+func deepCloneMetadataMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		switch val := v.(type) {
+		case map[string]any:
+			out[k] = deepCloneMetadataMap(val)
+		case []any:
+			sCopy := make([]any, len(val))
+			copy(sCopy, val)
+			out[k] = sCopy
+		case []string:
+			sCopy := make([]string, len(val))
+			copy(sCopy, val)
+			out[k] = sCopy
+		default:
+			out[k] = v
+		}
+	}
+	return out
+}
+
 func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (pathRet string, errRet error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -136,17 +160,21 @@ func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (pat
 			}
 		case auth.Metadata != nil:
 			auth.Metadata["disabled"] = auth.Disabled
-			metaCopy := make(map[string]any, len(auth.Metadata))
+			var metaCopy map[string]any
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
 						// ignore concurrent read tear
 					}
 				}()
+				metaCopy = deepCloneMetadataMap(auth.Metadata)
+			}()
+			if metaCopy == nil {
+				metaCopy = make(map[string]any, len(auth.Metadata))
 				for k, v := range auth.Metadata {
 					metaCopy[k] = v
 				}
-			}()
+			}
 			raw, errMarshal := json.Marshal(metaCopy)
 			if errMarshal != nil {
 				return "", fmt.Errorf("auth filestore: marshal metadata failed: %w", errMarshal)
